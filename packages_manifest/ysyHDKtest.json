@@ -1,0 +1,10 @@
+{
+
+    "env": [
+        {
+            "ysyHDKtest" : "D:/ysyhdktest/build/build/bin/ysyHDKTest"
+        }
+    ],
+    "hpath" : "$ysyHDKtest"
+    
+}
