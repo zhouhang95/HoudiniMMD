@@ -105,7 +105,7 @@ static const char *theDsFile = R"THEDSFILE(
         name    "mode"
         label   "Mode"
         type    ordinal
-        default { "0" }
+        default { "1" }
         menu    {
             "skin"    "Skin"
             "bone"    "Bone"
