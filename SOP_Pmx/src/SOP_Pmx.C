@@ -446,7 +446,7 @@ static void read_bones(
             auto pos = br.read_float3();
             detail->setPos3(start_ptoff + i, UT_Vector3(pos[0], pos[1], -pos[2]) * scale);
             auto parent_index = br.read_pmx_int(bone_index_size);
-            if (parent_index > 0) {
+            if (parent_index >= 0) {
                 buffer.push_back(parent_index);
                 buffer.push_back(i);
             }
@@ -487,7 +487,7 @@ static void read_bones(
         }
 
         GA_Offset start_vtxoff;
-        detail->appendPrimitivesAndVertices(GA_PRIMPOLY, buffer.size() / 2, 2, start_vtxoff, true);
+        detail->appendPrimitivesAndVertices(GA_PRIMPOLY, buffer.size() / 2, 2, start_vtxoff, false);
         for (auto i = 0; i < buffer.size(); i++) {
             auto j = buffer[i];
             detail->setVertexPoint(start_vtxoff + i, start_ptoff + j);
