@@ -130,8 +130,76 @@ SOP_MMDBoneDeform::cookVerb() const
     return SOP_MMDBoneDeformVerb::theVerb.get();
 }
 
+static std::vector<glm::mat4> getBoneMatrix(const GU_Detail *detail) {
+    std::vector<glm::mat4> matrixs;
+    GA_ROHandleM3 attr_transform = GA_ROHandleM3(detail->findFloatTuple(GA_ATTRIB_POINT, "transform", 9));
+    for (GA_Iterator it(detail->getPointRange()); !it.atEnd(); ++it) {
+        UT_Vector3 pos = detail->getPos3(*it);
+        UT_Matrix3 matrix = attr_transform.get(*it);
+        glm::mat4 mat;
+        mat[0] = {matrix[0][0], matrix[0][1], matrix[0][2], 0};
+        mat[1] = {matrix[1][0], matrix[1][1], matrix[1][2], 0};
+        mat[2] = {matrix[2][0], matrix[2][1], matrix[2][2], 0};
+        mat[3] = {pos[0], pos[1], pos[2], 1};
+        matrixs.push_back(mat);
+    }
+    return matrixs;
+}
+static std::vector<glm::mat4> getInvertedBoneMatrix(const GU_Detail *detail) {
+    std::vector<glm::mat4> inv_matrixs;
+    auto matrixs = getBoneMatrix(detail);
+    for (auto i = 0; i < matrixs.size(); i++) {
+        auto m = matrixs[i];
+        auto inv_m = glm::inverse(m);
+        inv_matrixs.push_back(inv_m);
+    }
+    return inv_matrixs;
+}
+
+static UT_Vector3 transform_pos(glm::mat4 &transform, UT_Vector3 pos) {
+    auto p = transform * glm::vec4(pos[0], pos[1], pos[2], 1);
+    return {p.x, p.y, p.z};
+}
+static UT_Vector3 transform_nrm(glm::mat4 &transform, UT_Vector3 pos) {
+    auto p = glm::transpose(glm::inverse(transform)) * glm::vec4(pos[0], pos[1], pos[2], 0);
+    return {p.x, p.y, p.z};
+}
+
 /// This is the function that does the actual work.
 void
 SOP_MMDBoneDeformVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
 {
+    GU_Detail *detail = cookparms.gdh().gdpNC();
+    const GU_Detail *input_0 = cookparms.inputGeo(0);
+    detail->duplicate(*input_0);
+    if (cookparms.hasInput(1) == false || cookparms.hasInput(2) == false) {
+        return;
+    }
+    const GU_Detail *input_1 = cookparms.inputGeo(1);
+    auto restPointTransformsInv = getInvertedBoneMatrix(input_1);
+    const GU_Detail *input_2 = cookparms.inputGeo(2);
+    auto deformPointTransforms = getBoneMatrix(input_2);
+    std::vector<glm::mat4> matrixs;
+    for (auto i = 0; i < restPointTransformsInv.size(); i++) {
+        auto matrix = deformPointTransforms[i] * restPointTransformsInv[i];
+        matrixs.push_back(matrix);
+    }
+    auto bones_index = GA_RWHandleV4(detail->findFloatTuple(GA_ATTRIB_POINT, "bones_index", 4));
+    auto bones_weight = GA_RWHandleV4(detail->findFloatTuple(GA_ATTRIB_POINT, "bones_weight", 4));
+    for (GA_Iterator it(detail->getPointRange()); !it.atEnd(); ++it) {
+        UT_Vector3 pos = detail->getPos3(*it);
+        UT_Vector3 new_pos = {};
+        float w = 0;
+        auto bi = bones_index.get(*it);
+        auto bw = bones_weight.get(*it);
+        for (auto i = 0; i < 4; i++) {
+            int bii = int(bi[i]);
+            if (bii >= 0 && bw[i] > 0) {
+                new_pos += transform_pos(matrixs[i], pos);
+                w += bw[i];
+            }
+        }
+        new_pos = new_pos / w;
+        detail->setPos3(*it, new_pos);
+    }
 }
