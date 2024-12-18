@@ -34,6 +34,7 @@
 #include <filesystem>
 #include <codecvt>
 #include <locale>
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/compatibility.hpp>

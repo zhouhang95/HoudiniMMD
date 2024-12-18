@@ -356,14 +356,18 @@ SOP_VmdVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
     auto bin = file_get_binary(file_path);
     auto br = BinaryReader(bin);
     auto currentFrame = sopparms.getFrame();
-    const GU_Detail *input_0 = cookparms.inputGeo(0);
-    std::vector<glm::vec3> poss;
-    std::vector<std::string> bone_names;
-    GA_ROHandleS bone_names_attr(input_0->findStringTuple(GA_ATTRIB_POINT , "name", 1));
-    for (GA_Iterator it(input_0->getPointRange()); !it.atEnd(); ++it) {
-        UT_Vector3 pos = input_0->getPos3(*it);
-        poss.emplace_back(pos.x(), pos.y(), pos.z());
-        bone_names.push_back(bone_names_attr.get(*it).toStdString());
+
+    if (cookparms.hasInput(0)) {
+        const GU_Detail *input_0 = cookparms.inputGeo(0);
+        detail->duplicate(*input_0);
+        std::vector<glm::vec3> poss;
+        std::vector<std::string> bone_names;
+        GA_ROHandleS bone_names_attr(input_0->findStringTuple(GA_ATTRIB_POINT , "name", 1));
+        for (GA_Iterator it(input_0->getPointRange()); !it.atEnd(); ++it) {
+            UT_Vector3 pos = input_0->getPos3(*it);
+            poss.emplace_back(pos.x(), pos.y(), pos.z());
+            bone_names.push_back(bone_names_attr.get(*it).toStdString());
+        }
     }
     read_anim(br, detail, scale, currentFrame);
     detail->bumpDataIdsForAddOrRemove(true, true, true);
