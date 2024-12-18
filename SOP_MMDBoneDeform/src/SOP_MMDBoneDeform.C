@@ -195,7 +195,7 @@ SOP_MMDBoneDeformVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
         for (auto i = 0; i < 4; i++) {
             int bii = int(bi[i]);
             if (bii >= 0 && bw[i] > 0) {
-                new_pos += transform_pos(matrixs[i], pos);
+                new_pos += transform_pos(matrixs[bii], pos) * bw[i];
                 w += bw[i];
             }
         }
