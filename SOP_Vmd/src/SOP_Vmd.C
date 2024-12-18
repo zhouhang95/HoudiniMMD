@@ -82,7 +82,7 @@ newSopOperator(OP_OperatorTable *table)
         "Vmd",                     // UI name
         SOP_Vmd::myConstructor,    // How to build the SOP
         SOP_Vmd::buildTemplates(), // My parameters
-        0,                          // Min # of sources
+        1,                          // Min # of sources
         1,                          // Max # of sources
         nullptr,                    // Custom local variables (none)
         OP_FLAG_GENERATOR));        // Flag it as generator
