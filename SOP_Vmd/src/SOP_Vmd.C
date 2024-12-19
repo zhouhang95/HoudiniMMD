@@ -407,5 +407,17 @@ SOP_VmdVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
     //     transform_r1[bi] = transform_nrm(transform, transform_r1[bi]);
     //     transform_r2[bi] = transform_nrm(transform, transform_r2[bi]);
     // }
+    std::map<int, glm::mat4> cache;
+    exint bi = 0;
+    for (GA_Iterator it(detail->getPointRange()); !it.atEnd(); ++it) {
+        glm::mat4 transform = glm::mat4(1.0f);
+
+        if (bone_connects.count(bi)) {
+            transform = cache[bone_connects[bi]] * transform;
+        }
+
+        cache[bi] = transform;
+        bi += 1;
+    }
     detail->bumpDataIdsForAddOrRemove(true, true, true);
 }
