@@ -370,5 +370,42 @@ SOP_VmdVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
         }
     }
     read_anim(br, detail, scale, currentFrame);
+
+    std::map<exint, exint> bone_connects;
+    std::vector<exint> vertex;
+    for (GA_Iterator it(detail->getPrimitiveRange()); !it.atEnd(); ++it) {
+        const GA_Primitive* prim = detail->getPrimitive(*it);
+        exint p = prim->getPointOffset(0);
+        exint c = prim->getPointOffset(1);
+        bone_connects[c] = p;
+    }
+    // auto ordering = TopologicalSorting(bone_connects, skeleton.get());
+    // auto &verts = skeleton->verts;
+    // auto &transform_r0 = skeleton->verts.add_attr<vec3f>("transform_r0");
+    // auto &transform_r1 = skeleton->verts.add_attr<vec3f>("transform_r1");
+    // auto &transform_r2 = skeleton->verts.add_attr<vec3f>("transform_r2");
+    // auto transforms    = getBoneMatrix(skeleton.get());
+    // auto transformsInv = getInvertedBoneMatrix(skeleton.get());
+    // std::map<int, glm::mat4> cache;
+    // for (auto bi: ordering) {
+    //     glm::mat4 transform = glm::mat4(1.0f);
+    //     if (Transformations.count(bi)) {
+    //         auto trans = Transformations[bi];
+    //         glm::mat4 matTrans = glm::translate(vec_to_other<glm::vec3>(trans->translate));
+    //         glm::mat4 matRotx  = glm::rotate(glm::radians(trans->rotate[0]), glm::vec3(1,0,0) );
+    //         glm::mat4 matRoty  = glm::rotate(glm::radians(trans->rotate[1]), glm::vec3(0,1,0) );
+    //         glm::mat4 matRotz  = glm::rotate(glm::radians(trans->rotate[2]), glm::vec3(0,0,1) );
+    //         transform = matTrans*matRoty*matRotx*matRotz;
+    //         transform = transforms[bi] * transform * transformsInv[bi];
+    //     }
+    //     if (bone_connects.count(bi)) {
+    //         transform = cache[bone_connects[bi]] * transform;
+    //     }
+    //     cache[bi] = transform;
+    //     verts[bi]        = transform_pos(transform, verts[bi]);
+    //     transform_r0[bi] = transform_nrm(transform, transform_r0[bi]);
+    //     transform_r1[bi] = transform_nrm(transform, transform_r1[bi]);
+    //     transform_r2[bi] = transform_nrm(transform, transform_r2[bi]);
+    // }
     detail->bumpDataIdsForAddOrRemove(true, true, true);
 }
