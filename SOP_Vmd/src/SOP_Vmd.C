@@ -269,7 +269,7 @@ static glm::vec4 read_bezier_control_point_pair4(BinaryReader &br) {
     return {x, y, z, w};
 }
 
-static void read_anim(BinaryReader &br, GU_Detail *detail, float scale, exint currentFrame) {
+static std::map<std::string, BoneFrame> read_anim(BinaryReader &br, GU_Detail *detail, float scale, exint currentFrame) {
     auto header = br.read_string(30);
     std::string name = br.read_string(header[24] == '2'? 20 : 10);
     name = ShiftJISToUTF8(name);
@@ -341,7 +341,60 @@ static void read_anim(BinaryReader &br, GU_Detail *detail, float scale, exint cu
         }
         cur_bone_frames[name] = result_frame;
     }
+    return cur_bone_frames;
 }
+
+
+static UT_Matrix3 glmmat3_to_utmat3(glm::mat3 matrix) {
+    UT_Matrix3 mat;
+    mat[0] = {matrix[0][0], matrix[0][1], matrix[0][2]};
+    mat[1] = {matrix[1][0], matrix[1][1], matrix[1][2]};
+    mat[2] = {matrix[2][0], matrix[2][1], matrix[2][2]};
+    return mat;
+}
+
+static glm::mat3 utmat3_to_glmmat3(UT_Matrix3 matrix) {
+    glm::mat3 mat;
+    mat[0] = {matrix[0][0], matrix[0][1], matrix[0][2]};
+    mat[1] = {matrix[1][0], matrix[1][1], matrix[1][2]};
+    mat[2] = {matrix[2][0], matrix[2][1], matrix[2][2]};
+    return mat;
+}
+static std::vector<glm::mat4> getBoneMatrix(const GU_Detail *detail) {
+    std::vector<glm::mat4> matrixs;
+    GA_ROHandleM3 attr_transform = GA_ROHandleM3(detail->findFloatTuple(GA_ATTRIB_POINT, "transform", 9));
+    for (GA_Iterator it(detail->getPointRange()); !it.atEnd(); ++it) {
+        UT_Vector3 pos = detail->getPos3(*it);
+        UT_Matrix3 matrix = attr_transform.get(*it);
+        glm::mat4 mat;
+        mat[0] = {matrix[0][0], matrix[0][1], matrix[0][2], 0};
+        mat[1] = {matrix[1][0], matrix[1][1], matrix[1][2], 0};
+        mat[2] = {matrix[2][0], matrix[2][1], matrix[2][2], 0};
+        mat[3] = {pos[0], pos[1], pos[2], 1};
+        matrixs.push_back(mat);
+    }
+    return matrixs;
+}
+static std::vector<glm::mat4> getInvertedBoneMatrix(const GU_Detail *detail) {
+    std::vector<glm::mat4> inv_matrixs;
+    auto matrixs = getBoneMatrix(detail);
+    for (auto i = 0; i < matrixs.size(); i++) {
+        auto m = matrixs[i];
+        auto inv_m = glm::inverse(m);
+        inv_matrixs.push_back(inv_m);
+    }
+    return inv_matrixs;
+}
+
+static UT_Vector3 transform_pos(glm::mat4 &transform, UT_Vector3 pos) {
+    auto p = transform * glm::vec4(pos[0], pos[1], pos[2], 1);
+    return {p.x, p.y, p.z};
+}
+static UT_Vector3 transform_nrm(glm::mat4 &transform, UT_Vector3 pos) {
+    auto p = glm::transpose(glm::inverse(transform)) * glm::vec4(pos[0], pos[1], pos[2], 0);
+    return {p.x, p.y, p.z};
+}
+
 /// This is the function that does the actual work.
 void
 SOP_VmdVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
@@ -369,7 +422,7 @@ SOP_VmdVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
             bone_names.push_back(bone_names_attr.get(*it).toStdString());
         }
     }
-    read_anim(br, detail, scale, currentFrame);
+    std::map<std::string, BoneFrame> anim = read_anim(br, detail, scale, currentFrame);
 
     std::map<exint, exint> bone_connects;
     std::vector<exint> vertex;
@@ -379,44 +432,32 @@ SOP_VmdVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
         exint c = prim->getPointOffset(1);
         bone_connects[c] = p;
     }
-    // auto ordering = TopologicalSorting(bone_connects, skeleton.get());
-    // auto &verts = skeleton->verts;
-    // auto &transform_r0 = skeleton->verts.add_attr<vec3f>("transform_r0");
-    // auto &transform_r1 = skeleton->verts.add_attr<vec3f>("transform_r1");
-    // auto &transform_r2 = skeleton->verts.add_attr<vec3f>("transform_r2");
-    // auto transforms    = getBoneMatrix(skeleton.get());
-    // auto transformsInv = getInvertedBoneMatrix(skeleton.get());
-    // std::map<int, glm::mat4> cache;
-    // for (auto bi: ordering) {
-    //     glm::mat4 transform = glm::mat4(1.0f);
-    //     if (Transformations.count(bi)) {
-    //         auto trans = Transformations[bi];
-    //         glm::mat4 matTrans = glm::translate(vec_to_other<glm::vec3>(trans->translate));
-    //         glm::mat4 matRotx  = glm::rotate(glm::radians(trans->rotate[0]), glm::vec3(1,0,0) );
-    //         glm::mat4 matRoty  = glm::rotate(glm::radians(trans->rotate[1]), glm::vec3(0,1,0) );
-    //         glm::mat4 matRotz  = glm::rotate(glm::radians(trans->rotate[2]), glm::vec3(0,0,1) );
-    //         transform = matTrans*matRoty*matRotx*matRotz;
-    //         transform = transforms[bi] * transform * transformsInv[bi];
-    //     }
-    //     if (bone_connects.count(bi)) {
-    //         transform = cache[bone_connects[bi]] * transform;
-    //     }
-    //     cache[bi] = transform;
-    //     verts[bi]        = transform_pos(transform, verts[bi]);
-    //     transform_r0[bi] = transform_nrm(transform, transform_r0[bi]);
-    //     transform_r1[bi] = transform_nrm(transform, transform_r1[bi]);
-    //     transform_r2[bi] = transform_nrm(transform, transform_r2[bi]);
-    // }
+    auto transforms    = getBoneMatrix(detail);
+    auto transformsInv = getInvertedBoneMatrix(detail);
     std::map<int, glm::mat4> cache;
     exint bi = 0;
+    GA_ROHandleS bone_names(detail->findStringTuple(GA_ATTRIB_POINT , "name", 1));
+    GA_RWHandleM3 attr_transform(detail->findFloatTuple(GA_ATTRIB_POINT, "transform", 9));
     for (GA_Iterator it(detail->getPointRange()); !it.atEnd(); ++it) {
         glm::mat4 transform = glm::mat4(1.0f);
+        std::string bone_name = bone_names.get(*it).toStdString();
+        if (anim.count(bone_name)) {
+            auto trans = anim[bone_name];
+            transform = glm::translate(trans.trans) * glm::toMat4(trans.rot);
+            transform = transforms[bi] * transform * transformsInv[bi];
+        }
 
         if (bone_connects.count(bi)) {
             transform = cache[bone_connects[bi]] * transform;
         }
 
         cache[bi] = transform;
+        UT_Vector3 pos = transform_pos(transform, detail->getPos3(*it));
+        detail->setPos3(*it, pos);
+
+        UT_Matrix3 pose = attr_transform.get(*it);
+        pose = glmmat3_to_utmat3(glm::mat3(transform) * utmat3_to_glmmat3(pose));
+        attr_transform.set(*it, pose);
         bi += 1;
     }
     detail->bumpDataIdsForAddOrRemove(true, true, true);

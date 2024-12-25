@@ -38,6 +38,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/compatibility.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/transform.hpp>
 
 namespace HDK_Sample {
     static std::vector<char> file_get_binary(std::string const &path) {
