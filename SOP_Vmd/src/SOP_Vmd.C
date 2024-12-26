@@ -169,6 +169,9 @@ static std::string ShiftJISToUTF8(const std::string shiftJISStr) {
     }
     std::string utf8Str(utf8Len, 0);
     WideCharToMultiByte(CP_UTF8, 0, wideStr.c_str(), -1, &utf8Str[0], utf8Len, NULL, NULL);
+    if (utf8Str.size() > 0) {
+        utf8Str.pop_back();
+    }
 
     return utf8Str;
 }
@@ -274,8 +277,7 @@ static std::map<std::string, BoneFrame> read_anim(BinaryReader &br, GU_Detail *d
     std::string name = br.read_string(header[24] == '2'? 20 : 10);
     name = ShiftJISToUTF8(name);
 
-    setUserData(detail, "header", header);
-    setUserData(detail, "name", name);
+    setUserData(detail, "vmd_name", name);
     setUserData(detail, "currentFrame", currentFrame);
 
     auto count = br.read_LE<uint32_t>();
