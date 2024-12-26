@@ -474,7 +474,6 @@ SOP_VmdVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
         UT_Matrix3 pose = attr_transform.get(bi);
         pose = glmmat3_to_utmat3(glm::mat3(transform) * utmat3_to_glmmat3(pose));
         attr_transform.set(bi, pose);
-        bi += 1;
     }
     detail->bumpDataIdsForAddOrRemove(true, true, true);
 }
