@@ -46,6 +46,7 @@
 #include <GU/GU_Detail.h>
 #include <GA/GA_Attribute.h>
 #include <GA/GA_AIFSharedStringTuple.h>
+ #include <GA/GA_SplittableRange.h>
 #include <UT/UT_StringArray.h>
 #include <SYS/SYS_Math.h>
 #include <SYS/SYS_Types.h>
@@ -186,20 +187,24 @@ SOP_MMDBoneDeformVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
     }
     auto bones_index = GA_RWHandleV4(detail->findFloatTuple(GA_ATTRIB_POINT, "bones_index", 4));
     auto bones_weight = GA_RWHandleV4(detail->findFloatTuple(GA_ATTRIB_POINT, "bones_weight", 4));
-    for (GA_Iterator it(detail->getPointRange()); !it.atEnd(); ++it) {
-        UT_Vector3 pos = detail->getPos3(*it);
-        UT_Vector3 new_pos = {};
-        float w = 0;
-        auto bi = bones_index.get(*it);
-        auto bw = bones_weight.get(*it);
-        for (auto i = 0; i < 4; i++) {
-            int bii = int(bi[i]);
-            if (bii >= 0 && bw[i] > 0) {
-                new_pos += transform_pos(matrixs[bii], pos) * bw[i];
-                w += bw[i];
+    UTparallelFor(
+        GA_SplittableRange(detail->getPointRange())
+        , [detail, &bones_index, &bones_weight, &matrixs](const GA_SplittableRange &r) {
+            for (GA_Iterator it(r); !it.atEnd(); ++it) {
+                UT_Vector3 pos = detail->getPos3(*it);
+                UT_Vector3 new_pos = {};
+                float w = 0;
+                auto bi = bones_index.get(*it);
+                auto bw = bones_weight.get(*it);
+                for (auto i = 0; i < 4; i++) {
+                    int bii = int(bi[i]);
+                    if (bii >= 0 && bw[i] > 0) {
+                        new_pos += transform_pos(matrixs[bii], pos) * bw[i];
+                        w += bw[i];
+                    }
+                }
+                new_pos = new_pos / w;
+                detail->setPos3(*it, new_pos);
             }
-        }
-        new_pos = new_pos / w;
-        detail->setPos3(*it, new_pos);
-    }
+    });
 }
