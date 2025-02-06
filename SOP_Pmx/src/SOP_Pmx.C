@@ -265,7 +265,7 @@ static void read_skin(
         setUserData(detail, "tex_names", textures);
     }
     {
-        GA_RWHandleS mat_names(detail->addStringTuple(GA_ATTRIB_PRIMITIVE , "material_name", 1));
+        GA_RWHandleS mat_names(detail->addStringTuple(GA_ATTRIB_PRIMITIVE , "name", 1));
         auto start = 0;
         auto count = br.read_LE<uint32_t>();
         for (auto i = 0; i < count; i++) {
