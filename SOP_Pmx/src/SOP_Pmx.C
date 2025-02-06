@@ -198,11 +198,13 @@ static void read_skin(
         auto bones_index = GA_RWHandleV4(detail->addFloatTuple(GA_ATTRIB_POINT, "bones_index", 4, GA_Defaults(-1.0)));
         auto bones_weight = GA_RWHandleV4(detail->addFloatTuple(GA_ATTRIB_POINT, "bones_weight", 4, GA_Defaults(-1.0)));
         auto uv_attrib = GA_RWHandleV3(detail->addTextureAttribute(GA_ATTRIB_POINT));
+        auto nrm_attrib = GA_RWHandleV3(detail->addNormalAttribute(GA_ATTRIB_POINT));
 
         for (auto i = 0; i < npoints; i++) {
             auto pos = br.read_float3();
             detail->setPos3(start_ptoff + i, UT_Vector3(pos[0], pos[1], -pos[2]) * scale);
             auto nrm = br.read_float3();
+            nrm_attrib.set(i, UT_Vector3(nrm[0], nrm[1], -nrm[2]));
             auto uv = br.read_float2();
             uv_attrib.set(i, UT_Vector3(uv[0], 1.0 - uv[1], 0.0));
             for (auto j = 0; j < appendix_uv; j++) {
