@@ -436,7 +436,7 @@ static void read_bones(
         GA_Offset start_ptoff = detail->appendPointBlock(count);
         GA_RWHandleS bone_names(detail->addStringTuple(GA_ATTRIB_POINT , "name", 1));
         GA_RWHandleM3 attr_transform(detail->addFloatTuple(GA_ATTRIB_POINT, "transform", 9));
-        GA_RWHandleV3 attr_inherit(detail->addFloatTuple(GA_ATTRIB_POINT, "inherit", 3));
+        GA_RWHandleV4 attr_inherit(detail->addFloatTuple(GA_ATTRIB_POINT, "inherit", 4));
 
         std::vector<int> buffer;
         for (auto i = 0; i < count; i++) {
@@ -460,11 +460,12 @@ static void read_bones(
             } else {
                 br.read_float3();
             };
-            UT_Vector3 inherit = {0, 0, 0};
+            UT_Vector4 inherit = {-1, 0, 0, 0};
             if (bone_flags.contains(BoneFlags::INHERIT_ROTATION) || bone_flags.contains(BoneFlags::INHERIT_TRANSLATION)) {
                 auto parent_index = br.read_pmx_int(bone_index_size);
                 auto affect = br.read_LE<float>();
                 inherit = {
+                    float(parent_index),
                     affect,
                     float(bone_flags.contains(BoneFlags::INHERIT_ROTATION)),
                     float(bone_flags.contains(BoneFlags::INHERIT_TRANSLATION)),
