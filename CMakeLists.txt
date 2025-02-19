@@ -30,4 +30,5 @@ find_package(Houdini REQUIRED)
 # 添加子目录
 add_subdirectory(SOP_Pmx)
 add_subdirectory(SOP_Vmd)
+add_subdirectory(SOP_VmdFile)
 add_subdirectory(SOP_MMDBoneDeform)
