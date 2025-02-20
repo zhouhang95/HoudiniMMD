@@ -233,12 +233,14 @@ static BoneKeyframe get_bonekeyframe(const GU_Detail *vmd, int index) {
     auto rc_attr    = GA_ROHandleV4(vmd->findFloatTuple(GA_ATTRIB_POINT, "rc", 4));
     BoneKeyframe bkf;
     bkf.frame = frame_attr.get(index);
+    auto trans = vmd->getPos3(index);
     auto rot = rot_attr.get(index);
     auto txc = txc_attr.get(index);
     auto tyc = tyc_attr.get(index);
     auto tzc = tzc_attr.get(index);
     auto rc  = rc_attr.get(index);
-    bkf.rot = glm::quat(rot[0], rot[1], rot[2], rot[3]); //???
+    bkf.trans = glm::vec3(trans[0], trans[1], trans[2]);
+    bkf.rot = glm::quat(rot[3], rot[0], rot[1], rot[2]);
     bkf.txc = glm::vec4(txc[0], txc[1], txc[2], txc[3]);
     bkf.tyc = glm::vec4(tyc[0], tyc[1], tyc[2], tyc[3]);
     bkf.tzc = glm::vec4(tzc[0], tzc[1], tzc[2], tzc[3]);
@@ -256,7 +258,7 @@ static std::map<std::string, BoneFrame> calc_cur_anim(GU_Detail *detail, const G
         for (auto i = 0; i < count1; i++) {
             int frame = frame_attr.get(i);
             if (frame == 0) {
-                name = name_attr.get(i);
+                name = name_attr.get(i).toStdString();
                 if (frames.size()) {
                     bone_keyframes[name] = frames;
                 }
