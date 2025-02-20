@@ -258,10 +258,10 @@ static std::map<std::string, BoneFrame> calc_cur_anim(GU_Detail *detail, const G
         for (auto i = 0; i < count1; i++) {
             int frame = frame_attr.get(i);
             if (frame == 0) {
-                name = name_attr.get(i).toStdString();
                 if (frames.size()) {
                     bone_keyframes[name] = frames;
                 }
+                name = name_attr.get(i).toStdString();
                 frames.clear();
             }
             frames.emplace_back(frame, i);
