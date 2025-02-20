@@ -83,7 +83,7 @@ newSopOperator(OP_OperatorTable *table)
         SOP_Vmd::myConstructor,    // How to build the SOP
         SOP_Vmd::buildTemplates(), // My parameters
         1,                          // Min # of sources
-        1,                          // Max # of sources
+        2,                          // Max # of sources
         nullptr,                    // Custom local variables (none)
         OP_FLAG_GENERATOR));        // Flag it as generator
 }
@@ -93,20 +93,6 @@ newSopOperator(OP_OperatorTable *table)
 static const char *theDsFile = R"THEDSFILE(
 {
     name        parameters
-    parm {
-        name    "vmd_path"
-        label   "VMD Path"
-        type    file
-        default { "D:/IA_Conqueror_light_version.vmd" }
-        parmtag { "filechooser_pattern" "*.vmd" }
-        parmtag { "filechooser_mode" "read" }
-    }
-    parm {
-        name    "scale"
-        label   "Scale"
-        type    float
-        default { "0.08" }
-    }
     parm {
         name    "frame"
         label   "Frame"
@@ -149,31 +135,6 @@ const SOP_NodeVerb *
 SOP_Vmd::cookVerb() const 
 { 
     return SOP_VmdVerb::theVerb.get();
-}
-
-
-// Shift-JIS to UTF-8 conversion function
-static std::string ShiftJISToUTF8(const std::string shiftJISStr) {
-    // Step 1: Convert Shift-JIS to UTF-16
-    int wideCharLen = MultiByteToWideChar(932, 0, shiftJISStr.c_str(), -1, NULL, 0);
-    if (wideCharLen == 0) {
-        return ""; // Conversion failed
-    }
-    std::wstring wideStr(wideCharLen, 0);
-    MultiByteToWideChar(932, 0, shiftJISStr.c_str(), -1, &wideStr[0], wideCharLen);
-
-    // Step 2: Convert UTF-16 to UTF-8
-    int utf8Len = WideCharToMultiByte(CP_UTF8, 0, wideStr.c_str(), -1, NULL, 0, NULL, NULL);
-    if (utf8Len == 0) {
-        return ""; // Conversion failed
-    }
-    std::string utf8Str(utf8Len, 0);
-    WideCharToMultiByte(CP_UTF8, 0, wideStr.c_str(), -1, &utf8Str[0], utf8Len, NULL, NULL);
-    if (utf8Str.size() > 0) {
-        utf8Str.pop_back();
-    }
-
-    return utf8Str;
 }
 
 struct BoneFrame {
@@ -263,81 +224,68 @@ struct BoneKeyframe {
         return bf;
     }
 };
-
-static glm::vec4 read_bezier_control_point_pair4(BinaryReader &br) {
-    float x = float(br.read_LE<uint32_t>() & 0xFF) / 127.0;
-    float y = float(br.read_LE<uint32_t>() & 0xFF) / 127.0;
-    float z = float(br.read_LE<uint32_t>() & 0xFF) / 127.0;
-    float w = float(br.read_LE<uint32_t>() & 0xFF) / 127.0;
-    return {x, y, z, w};
+static BoneKeyframe get_bonekeyframe(const GU_Detail *vmd, int index) {
+    auto frame_attr = GA_ROHandleI( vmd->findIntTuple(GA_ATTRIB_POINT, "frame", 1));
+    auto rot_attr   = GA_ROHandleQ( vmd->findFloatTuple(GA_ATTRIB_POINT, "rot", 4));
+    auto txc_attr   = GA_ROHandleV4(vmd->findFloatTuple(GA_ATTRIB_POINT, "txc", 4));
+    auto tyc_attr   = GA_ROHandleV4(vmd->findFloatTuple(GA_ATTRIB_POINT, "tyc", 4));
+    auto tzc_attr   = GA_ROHandleV4(vmd->findFloatTuple(GA_ATTRIB_POINT, "tzc", 4));
+    auto rc_attr    = GA_ROHandleV4(vmd->findFloatTuple(GA_ATTRIB_POINT, "rc", 4));
+    BoneKeyframe bkf;
+    bkf.frame = frame_attr.get(index);
+    auto rot = rot_attr.get(index);
+    auto txc = txc_attr.get(index);
+    auto tyc = tyc_attr.get(index);
+    auto tzc = tzc_attr.get(index);
+    auto rc  = rc_attr.get(index);
+    bkf.rot = glm::quat(rot[0], rot[1], rot[2], rot[3]); //???
+    bkf.txc = glm::vec4(txc[0], txc[1], txc[2], txc[3]);
+    bkf.tyc = glm::vec4(tyc[0], tyc[1], tyc[2], tyc[3]);
+    bkf.tzc = glm::vec4(tzc[0], tzc[1], tzc[2], tzc[3]);
+    bkf.rc = glm::vec4(rc[0], rc[1], rc[2], rc[3]);
+    return bkf;
 }
-
-static std::map<std::string, BoneFrame> read_anim(BinaryReader &br, GU_Detail *detail, float scale, exint currentFrame) {
-    auto header = br.read_string(30);
-    std::string name = br.read_string(header[24] == '2'? 20 : 10);
-    name = ShiftJISToUTF8(name);
-
-    setUserData(detail, "vmd_name", name);
-    setUserData(detail, "currentFrame", currentFrame);
-
-    auto count = br.read_LE<uint32_t>();
-    std::map<std::string, std::vector<BoneKeyframe>> bone_keyframes;
-    for (auto i = 0; i < count; i++) {
-        BoneKeyframe bk;
-        auto name = br.read_string(15);
-        name = ShiftJISToUTF8(name);
-        bk.frame = br.read_LE<uint32_t>();
-        bk.trans = br.read_float3() * glm::vec3(1, 1, -1) * scale;
-        bk.rot = br.read_quat();
-        bk.rot.x *= -1;
-        bk.rot.y *= -1;
-        bk.txc = Bezier(read_bezier_control_point_pair4(br));
-        bk.tyc = Bezier(read_bezier_control_point_pair4(br));
-        bk.tzc = Bezier(read_bezier_control_point_pair4(br));
-        bk.rc  = Bezier(read_bezier_control_point_pair4(br));
-        bone_keyframes[name].push_back(bk);
-    }
+static std::map<std::string, BoneFrame> calc_cur_anim(GU_Detail *detail, const GU_Detail *vmd, exint currentFrame) {
+    std::map<std::string, std::vector<glm::ivec2>> bone_keyframes;
     {
-        std::vector<std::string> need_remove_names;
-        for (auto &[name, kfs]: bone_keyframes) {
-            bool need_remove = true;
-            for (auto &kf: kfs) {
-                if (kf.is_zero() == false) {
-                    need_remove = false;
-                    break;
+        auto frame_attr = GA_ROHandleI(vmd->findIntTuple(GA_ATTRIB_POINT, "frame", 1));
+        auto name_attr = GA_ROHandleS(vmd->findStringTuple(GA_ATTRIB_POINT , "name", 1));
+        std::string name;
+        std::vector<glm::ivec2> frames;
+        int count1 = vmd->getNumPoints();
+        for (auto i = 0; i < count1; i++) {
+            int frame = frame_attr.get(i);
+            if (frame == 0) {
+                name = name_attr.get(i);
+                if (frames.size()) {
+                    bone_keyframes[name] = frames;
                 }
+                frames.clear();
             }
-            if (need_remove) {
-                need_remove_names.push_back(name);
-            }
-            else {
-                std::sort(kfs.begin(), kfs.end(), [](const auto& a, const auto& b) {
-                    return a.frame < b.frame;
-                });
-            }
+            frames.emplace_back(frame, i);
         }
-        for (auto &name: need_remove_names) {
-            bone_keyframes.erase(name);
+        if (frames.size()) {
+            bone_keyframes[name] = frames;
         }
     }
     std::map<std::string, BoneFrame> cur_bone_frames;
     for (auto &[name, kfs]: bone_keyframes) {
         size_t cur_index = 0;
         for (size_t i = 0; i < kfs.size(); ++i) {
-            if (kfs[i].frame <= currentFrame) {
+            if (kfs[i][0] <= currentFrame) {
                 cur_index = i;
             } else {
                 break;
             }
         }
 
-        auto& kf = kfs[cur_index];
+        auto kf = get_bonekeyframe(vmd, kfs[cur_index][1]);
         BoneFrame result_frame;
 
         if (kf.frame == currentFrame || cur_index == kfs.size() - 1) {
             result_frame = kf.to_bone_frame();
         } else {
-            auto& nkf = kfs[cur_index + 1];
+            auto nkf = get_bonekeyframe(vmd, kfs[cur_index + 1][1]);
             float t = static_cast<float>(currentFrame - kf.frame) / (nkf.frame - kf.frame);
             result_frame = kf.lerp(nkf, t);
         }
@@ -403,16 +351,11 @@ SOP_VmdVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
 {
     auto &&sopparms = cookparms.parms<SOP_VmdParms>();
 
-    float scale = sopparms.getScale();
     GU_Detail *detail = cookparms.gdh().gdpNC();
     detail->clearAndDestroy();
-    auto file_path = sopparms.getVmd_path().toStdString();
-    setUserData(detail, "file_path", file_path);
-    auto bin = file_get_binary(file_path);
-    auto br = BinaryReader(bin);
     auto currentFrame = sopparms.getFrame();
 
-    if (cookparms.hasInput(0)) {
+    {
         const GU_Detail *input_0 = cookparms.inputGeo(0);
         detail->duplicate(*input_0);
         std::vector<glm::vec3> poss;
@@ -424,54 +367,57 @@ SOP_VmdVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
             bone_names.push_back(bone_names_attr.get(*it).toStdString());
         }
     }
-    std::map<std::string, BoneFrame> anim = read_anim(br, detail, scale, currentFrame);
-
-    std::map<exint, exint> bone_connects;
-    std::vector<exint> vertex;
-    for (GA_Iterator it(detail->getPrimitiveRange()); !it.atEnd(); ++it) {
-        const GA_Primitive* prim = detail->getPrimitive(*it);
-        exint p = prim->getPointOffset(0);
-        exint c = prim->getPointOffset(1);
-        bone_connects[c] = p;
-    }
-    auto transforms    = getBoneMatrix(detail);
-    auto transformsInv = getInvertedBoneMatrix(detail);
-    std::map<int, glm::mat4> cache;
-    GA_ROHandleS bone_names(detail->findStringTuple(GA_ATTRIB_POINT , "name", 1));
-    GA_RWHandleM3 attr_transform(detail->findFloatTuple(GA_ATTRIB_POINT, "transform", 9));
-    GA_ROHandleV4 attr_inherit(detail->addFloatTuple(GA_ATTRIB_POINT, "inherit", 4));
-    for (GA_Iterator it(detail->getPointRange()); !it.atEnd(); ++it) {
-        exint bi = *it;
-        glm::mat4 transform = glm::mat4(1.0f);
-        UT_Vector4 inherit = attr_inherit.get(bi);
-        if (inherit[1] != 0.0f) {
-            std::string bone_name = bone_names.get(int(inherit[0])).toStdString();
+    if (cookparms.hasInput(1)) {
+        const GU_Detail *vmd = cookparms.inputGeo(1);
+        std::map<std::string, BoneFrame> anim = calc_cur_anim(detail, vmd, currentFrame);
+    
+        std::map<exint, exint> bone_connects;
+        std::vector<exint> vertex;
+        for (GA_Iterator it(detail->getPrimitiveRange()); !it.atEnd(); ++it) {
+            const GA_Primitive* prim = detail->getPrimitive(*it);
+            exint p = prim->getPointOffset(0);
+            exint c = prim->getPointOffset(1);
+            bone_connects[c] = p;
+        }
+        auto transforms    = getBoneMatrix(detail);
+        auto transformsInv = getInvertedBoneMatrix(detail);
+        std::map<int, glm::mat4> cache;
+        GA_ROHandleS bone_names(detail->findStringTuple(GA_ATTRIB_POINT , "name", 1));
+        GA_RWHandleM3 attr_transform(detail->findFloatTuple(GA_ATTRIB_POINT, "transform", 9));
+        GA_ROHandleV4 attr_inherit(detail->addFloatTuple(GA_ATTRIB_POINT, "inherit", 4));
+        for (GA_Iterator it(detail->getPointRange()); !it.atEnd(); ++it) {
+            exint bi = *it;
+            glm::mat4 transform = glm::mat4(1.0f);
+            UT_Vector4 inherit = attr_inherit.get(bi);
+            if (inherit[1] != 0.0f) {
+                std::string bone_name = bone_names.get(int(inherit[0])).toStdString();
+                if (anim.count(bone_name)) {
+                    auto trans = anim[bone_name];
+                    glm::vec3 translate = trans.trans * inherit[1] * inherit[3];
+                    glm::quat rotation = glm::slerp({1, 0, 0, 0}, trans.rot, inherit[1] * inherit[2]);
+                    transform = glm::translate(translate) * glm::toMat4(rotation);
+                    transform = transforms[bi] * transform * transformsInv[bi];
+                }
+            }
+            std::string bone_name = bone_names.get(bi).toStdString();
             if (anim.count(bone_name)) {
                 auto trans = anim[bone_name];
-                glm::vec3 translate = trans.trans * inherit[1] * inherit[3];
-                glm::quat rotation = glm::slerp({1, 0, 0, 0}, trans.rot, inherit[1] * inherit[2]);
-                transform = glm::translate(translate) * glm::toMat4(rotation);
+                transform = glm::translate(trans.trans) * glm::toMat4(trans.rot);
                 transform = transforms[bi] * transform * transformsInv[bi];
             }
+    
+            if (bone_connects.count(bi)) {
+                transform = cache[bone_connects[bi]] * transform;
+            }
+    
+            cache[bi] = transform;
+            UT_Vector3 pos = transform_pos(transform, detail->getPos3(bi));
+            detail->setPos3(bi, pos);
+    
+            UT_Matrix3 pose = attr_transform.get(bi);
+            pose = glmmat3_to_utmat3(glm::mat3(transform) * utmat3_to_glmmat3(pose));
+            attr_transform.set(bi, pose);
         }
-        std::string bone_name = bone_names.get(bi).toStdString();
-        if (anim.count(bone_name)) {
-            auto trans = anim[bone_name];
-            transform = glm::translate(trans.trans) * glm::toMat4(trans.rot);
-            transform = transforms[bi] * transform * transformsInv[bi];
-        }
-
-        if (bone_connects.count(bi)) {
-            transform = cache[bone_connects[bi]] * transform;
-        }
-
-        cache[bi] = transform;
-        UT_Vector3 pos = transform_pos(transform, detail->getPos3(bi));
-        detail->setPos3(bi, pos);
-
-        UT_Matrix3 pose = attr_transform.get(bi);
-        pose = glmmat3_to_utmat3(glm::mat3(transform) * utmat3_to_glmmat3(pose));
-        attr_transform.set(bi, pose);
     }
     detail->bumpDataIdsForAddOrRemove(true, true, true);
 }
