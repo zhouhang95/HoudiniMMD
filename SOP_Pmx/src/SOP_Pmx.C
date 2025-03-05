@@ -537,7 +537,7 @@ SOP_PmxVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
     auto comment_en = br.read_pmx_string();
 
     setUserData(detail, "file_path", file_path);
-    setUserData(detail, "name", name);
+    setUserData(detail, "name_uni", name);
     setUserData(detail, "name_en", name_en);
     setUserData(detail, "comment", comment);
     setUserData(detail, "comment_en", comment_en);
